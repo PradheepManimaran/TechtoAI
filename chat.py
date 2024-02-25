@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 
 # Define FastAPI server URL
-SERVER_URL = "http://localhost:8000"
+SERVER_URL = "http://localhost:8002"
 
 # Streamlit app
 def main():

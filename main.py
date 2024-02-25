@@ -5,7 +5,6 @@ from langchain.chains import RetrievalQA
 from langchain.vectorstores import Chroma
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
-import constants
 
 
 if __name__ == "__main__":

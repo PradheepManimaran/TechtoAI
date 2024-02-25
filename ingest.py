@@ -3,7 +3,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 import os
-from constants import CHROMA_SETTINGS
+from langchain_community.vectorstores import Qdrant
 import logging
 import constants
 from langchain.embeddings import SentenceTransformerEmbeddings
@@ -11,7 +11,6 @@ from langchain.embeddings import SentenceTransformerEmbeddings
 
 persist_directory = "db"
 logger = logging.getLogger(__name__)
-os.environ["OPENAI_API_KEY"] = constants.APIKEY
 def main():
     documents = load_documents("docs")
 
@@ -42,11 +41,17 @@ def main():
 
     # Create vector store
     print("Creating embeddings. May take some minutes...")
-    db = Chroma.from_documents(
-        texts, embeddings_model, persist_directory=persist_directory, client_settings=CHROMA_SETTINGS
+    
+    url = "http://localhost:6333"
+    qdrant = Qdrant.from_documents(
+        texts,
+        embeddings_model,
+        url=url,
+        prefer_grpc=False,
+        collection_name="vector_db"
     )
-    db.persist()
-    db = None
+
+    print("Vector DB Successfully Created!")
 
     print("Ingestion completed")
 

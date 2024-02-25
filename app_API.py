@@ -2,16 +2,18 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from langchain.document_loaders import PyPDFLoader, CSVLoader, PDFMinerLoader, TextLoader, UnstructuredExcelLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import SentenceTransformerEmbeddings
-from langchain.vectorstores import Chroma
 import os
+
+from qdrant_client import QdrantClient
 from constants import CHROMA_SETTINGS
 import logging
 from typing import List
-from langchain_community.vectorstores import Chroma
+
 from langchain.llms import Ollama
 from langchain.chains import RetrievalQA
-
+from langchain_community.vectorstores import Qdrant
+from langchain_community import embeddings
+from langchain.embeddings import SentenceTransformerEmbeddings
 
 app = FastAPI()
 
@@ -89,13 +91,20 @@ def process_documents(documents: List[str]):
     # Load Sentence Transformers model
     embeddings_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
+
     # Create vector store
     logger.info("Creating embeddings. May take some minutes...")
-    db = Chroma.from_documents(
-        texts, embeddings_model, persist_directory=persist_directory, client_settings=CHROMA_SETTINGS
+   
+    url = "http://localhost:6333"
+    qdrant = Qdrant.from_documents(
+        texts,
+        embeddings_model,
+        url=url,
+        prefer_grpc=False,
+        collection_name="vector_db"
     )
-    db.persist()
-    db = None
+
+    print("Vector DB Successfully Created!")
 
     logger.info("Ingestion completed")
     return {"message": "Ingestion completed"}
@@ -104,21 +113,27 @@ def process_documents(documents: List[str]):
 @app.get("/answer/")
 async def get_answer(question: str):
     
-    persist_directory = os.environ.get("PERSIST_DIRECTORY", "db")
     embeddings_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    collection_name = "vector_db"
+    url = "http://localhost:6333"
 
-# Load from disk
-    db_chroma = Chroma(persist_directory=persist_directory, embedding_function=embeddings_model)
+    client = QdrantClient(
+        url=url, prefer_grpc=False
+    )
 
-    # Use Ollama for language modeling
+    print(client)
+    print("##############")
+    
+    db = Qdrant( client =client , collection_name=collection_name, embeddings=embeddings_model, )
+    
     ollama = Ollama(model="mistral")
     """
     Endpoint to get the answer to a question.
     """
     try:
         # Get document similarities based on the question
-        docs = db_chroma.similarity_search(question)
-        retriever = db_chroma.as_retriever()
+        docs = db.similarity_search(question)
+        retriever = db.as_retriever()
         # Create RetrievalQA chain
         qachain = RetrievalQA.from_chain_type(ollama, retriever=retriever, chain_type="stuff",
                                                return_source_documents=True)
@@ -129,6 +144,7 @@ async def get_answer(question: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
+    
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)
